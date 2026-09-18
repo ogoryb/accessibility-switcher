@@ -2,13 +2,12 @@
 
 cd /home/user/hostcwd
 
-# Создаём папку и файл конфигурации сервиса, встраивая строку напрямую
+# Создаём папку и файл конфигурации сервиса (БЕЗ android:description)
 mkdir -p res/xml
 
 cat > res/xml/accessibility_service_config.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="Переключает Wi-Fi и точку доступа по команде приложения"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
