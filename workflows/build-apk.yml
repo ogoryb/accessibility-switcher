@@ -1,4 +1,5 @@
-name: .github/workflows/build-apk.yml
+name: Build Kivy APK
+
 on:
   push:
     branches: [ main ]
