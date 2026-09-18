@@ -18,10 +18,7 @@ jobs:
             --entrypoint bash \
             -v "$PWD":/home/user/hostcwd \
             kivy/buildozer:latest \
-            -c "mkdir -p /root/.buildozer/android/platform/android-sdk/licenses && \
-                echo '24333f8a63b6825ea9c5514f83c2829b004d1fee' > /root/.buildozer/android/platform/android-sdk/licenses/android-sdk-license && \
-                echo '84831b9409646a918e30573bab4c9c91346d8abd' > /root/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license && \
-                cd /home/user/hostcwd && echo y | buildozer android debug"
+            /home/user/hostcwd/scripts/build.sh
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
