@@ -17,7 +17,9 @@ fullscreen = 0
 android.permissions =
 android.api = 33
 android.minapi = 21
-android.ndk = 25b
+android.ndk = 27b
+android.extra_ldflags = -Wl,-z,common-page-size=16384 -Wl,-z,max-page-size=16384
+android.extra_cflags = -O2 -DPAGE_SIZE=16384
 android.accept_sdk_license = True
 # Собираем только одну архитектуру: сборка сразу нескольких (arm64-v8a +
 # armeabi-v7a) переиспользует общую временную venv-папку между ними и
