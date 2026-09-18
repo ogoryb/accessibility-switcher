@@ -2,7 +2,7 @@
     android:name="org.example.accswitcher.AccService"
     android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
     android:exported="true"
-    android:label="@string/accessibility_service_label">
+    android:label="AccSwitcher">
     <intent-filter>
         <action android:name="android.accessibilityservice.AccessibilityService" />
     </intent-filter>
