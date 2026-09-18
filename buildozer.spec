@@ -1,33 +1,23 @@
 [app]
-title = Рисование круга
-package.name = circleapp
+title = AccSwitcher
+package.name = accswitcher
 package.domain = org.example
-
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
-
-version = 1.0
-
-requirements = python3,kivy
-
+source.include_exts = py,png,jpg,kv,atlas,xml,java
+version = 0.1
+requirements = python3,kivy,jnius
 orientation = portrait
 fullscreen = 0
 
-# Android specific
-android.permissions =
 android.api = 33
 android.minapi = 21
-android.ndk = 27b
-android.extra_ldflags = -Wl,-z,common-page-size=16384 -Wl,-z,max-page-size=16384
-android.extra_cflags = -O2 -DPAGE_SIZE=16384
-android.accept_sdk_license = True
-# Собираем только одну архитектуру: сборка сразу нескольких (arm64-v8a +
-# armeabi-v7a) переиспользует общую временную venv-папку между ними и
-# натыкается на известный баг python-for-android (issue #3339 / PR #3360),
-# который ломает pip внутри неё. arm64-v8a покрывает подавляющее
-# большинство современных Android-устройств.
-android.archs = arm64-v8a
+android.ndk = 25b
+android.archs = arm64-v8a, armeabi-v7a
+android.permissions = BIND_ACCESSIBILITY_SERVICE, SYSTEM_ALERT_WINDOW
+android.add_src = java
+android.extra_manifest_application = %(source.dir)s/manifest_application.xml
+android.res_xml = res/xml
+android.res_values = res/values
 
 [buildozer]
 log_level = 2
-warn_on_root = 1
