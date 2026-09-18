@@ -1,0 +1,4 @@
+<resources>
+    <string name="accessibility_service_label">AccSwitcher</string>
+    <string name="accessibility_service_description">Переключает Wi-Fi и точку доступа по команде приложения</string>
+</resources>
