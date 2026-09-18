@@ -1,4 +1,3 @@
-[app]
 title = AccSwitcher
 package.name = accswitcher
 package.domain = org.example
