@@ -16,6 +16,5 @@ android.permissions = BIND_ACCESSIBILITY_SERVICE, SYSTEM_ALERT_WINDOW
 android.add_src = java
 android.extra_manifest_application = %(source.dir)s/manifest_application.xml
 android.res_xml = res/xml/accessibility_service_config.xml
-android.res_values = res/values/strings.xml
 [buildozer]
 log_level = 2
