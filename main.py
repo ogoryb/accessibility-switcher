@@ -10,10 +10,8 @@ from jnius import autoclass
 
 AccService = autoclass('org.example.accswitcher.AccService')
 
-# Варианты подписей на плитках (может отличаться в зависимости от оператора)
-WIFI_LABELS = ["Wi-Fi", "WLAN", "WiFi"]
-MOBILE_LABELS = ["t2", "T2", "Т2", "Мобильные данные", "Мобильный интернет",
-                 "Mobile data", "Mobile network"]
+WIFI_LABELS = ["Wi-Fi", "WLAN", "WiFi", "wi-fi"]
+MOBILE_LABELS = ["t2", "T2", "Т2", "Мобильные данные", "Мобильный интернет", "Mobile data"]
 HOTSPOT_LABELS = ["Точка доступа Wi-Fi", "Точка доступа", "Hotspot"]
 
 
@@ -21,8 +19,15 @@ def wait(seconds):
     time.sleep(seconds)
 
 
-def ensure_state(label_variants, desired, max_attempts=4):
-    for attempt in range(max_attempts):
+def open_panel():
+    AccService.openQuickSettings()
+    wait(2.0)
+
+
+def toggle_once(label_variants, desired):
+    """Открывает шторку, проверяет состояние, при необходимости кликает. Возвращает True/False."""
+    for attempt in range(3):
+        open_panel()
         state = -1
         found_label = None
         for label in label_variants:
@@ -32,47 +37,31 @@ def ensure_state(label_variants, desired, max_attempts=4):
                 break
         print("STATE %s = %s (attempt %d)" % (label_variants, state, attempt + 1))
         if state == -1:
-            wait(0.8)
+            wait(1.0)
             continue
         if state == 1 and desired:
             return True
         if state == 0 and not desired:
             return True
         AccService.clickByText(found_label)
-        wait(1.5)
+        wait(2.0)
     return False
 
 
 def switch_to_mobile():
     print("=== SWITCH TO MOBILE ===")
-    AccService.openQuickSettings()
-    wait(2.0)
-    ensure_state(WIFI_LABELS, False)
-    wait(0.8)
-    ensure_state(MOBILE_LABELS, True)
-    wait(0.8)
-    ensure_state(HOTSPOT_LABELS, True)
+    toggle_once(WIFI_LABELS, False)
+    toggle_once(MOBILE_LABELS, True)
+    toggle_once(HOTSPOT_LABELS, True)
     print("=== DONE ===")
 
 
 def switch_to_wifi():
     print("=== SWITCH TO WIFI ===")
-    AccService.openQuickSettings()
-    wait(2.0)
-    ensure_state(HOTSPOT_LABELS, False)
-    wait(0.8)
-    ensure_state(MOBILE_LABELS, False)
-    wait(0.8)
-    ensure_state(WIFI_LABELS, True)
+    toggle_once(HOTSPOT_LABELS, False)
+    toggle_once(MOBILE_LABELS, False)
+    toggle_once(WIFI_LABELS, True)
     print("=== DONE ===")
-
-
-def dump_all():
-    print("=== DUMP ALL TEXTS ===")
-    AccService.openQuickSettings()
-    wait(2.0)
-    AccService.dumpTexts()
-    print("=== DUMP SENT — смотрите logcat ===")
 
 
 class AccSwitcherApp(App):
@@ -82,17 +71,13 @@ class AccSwitcherApp(App):
             text="AccSwitcher\n\nТест через панель быстрых настроек",
             halign='center'
         ))
-        btn1 = Button(text="Тест: МОБИЛЬНЫЙ", size_hint=(1, 0.22))
+        btn1 = Button(text="Тест: МОБИЛЬНЫЙ", size_hint=(1, 0.3))
         btn1.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
         layout.add_widget(btn1)
 
-        btn2 = Button(text="Тест: WI-FI", size_hint=(1, 0.22))
+        btn2 = Button(text="Тест: WI-FI", size_hint=(1, 0.3))
         btn2.bind(on_press=lambda x: Thread(target=switch_to_wifi).start())
         layout.add_widget(btn2)
-
-        btn3 = Button(text="ДИАГНОСТИКА (показать все надписи)", size_hint=(1, 0.22))
-        btn3.bind(on_press=lambda x: Thread(target=dump_all).start())
-        layout.add_widget(btn3)
 
         return layout
 
