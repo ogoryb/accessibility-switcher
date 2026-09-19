@@ -30,60 +30,46 @@ public class AccService extends AccessibilityService {
     }
 
     public static boolean openQuickSettings() {
-        if (instance == null) {
-            Log.e(TAG, "openQuickSettings: instance null");
-            return false;
-        }
+        if (instance == null) return false;
         boolean r = instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
         Log.d(TAG, "openQuickSettings -> " + r);
         return r;
     }
 
-    public static int getStateByText(String text) {
-        if (instance == null) {
-            Log.e(TAG, "getState: instance null");
-            return -1;
-        }
+    public static boolean hasText(String text) {
+        if (text == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-        if (root == null) {
-            Log.e(TAG, "getState " + text + ": root null");
-            return -1;
-        }
-        AccessibilityNodeInfo node = findNode(root, text);
-        if (node == null) {
-            Log.d(TAG, "getState " + text + ": not found");
-            return -1;
-        }
-        AccessibilityNodeInfo checkable = node;
-        while (checkable != null && !checkable.isCheckable()) {
-            checkable = checkable.getParent();
-        }
-        if (checkable == null) {
-            Log.d(TAG, "getState " + text + ": no checkable parent");
-            return -1;
-        }
-        int state = checkable.isChecked() ? 1 : 0;
-        Log.d(TAG, "getState " + text + " -> " + state);
-        return state;
+        if (root == null) return false;
+        boolean found = findNode(root, text) != null;
+        Log.d(TAG, "hasText " + text + " -> " + found);
+        return found;
     }
 
     public static boolean clickByText(String text) {
-        if (text == null) {
-            Log.e(TAG, "click: text null");
-            return false;
-        }
-        if (instance == null) {
-            Log.e(TAG, "click " + text + ": instance null");
-            return false;
-        }
+        if (text == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
         if (root == null) {
             Log.e(TAG, "click " + text + ": root null");
             return false;
         }
-        boolean r = findAndClick(root, text);
-        Log.d(TAG, "click " + text + " -> " + r);
-        return r;
+        AccessibilityNodeInfo node = findNode(root, text);
+        if (node == null) {
+            Log.d(TAG, "click " + text + ": not found");
+            return false;
+        }
+        // кликаем сам узел или его кликабельного предка
+        AccessibilityNodeInfo clickable = node;
+        while (clickable != null && !clickable.isClickable()) {
+            clickable = clickable.getParent();
+        }
+        if (clickable != null) {
+            boolean r = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            Log.d(TAG, "click ancestor " + text + " -> " + r);
+            if (r) return true;
+        }
+        boolean r2 = node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        Log.d(TAG, "click self " + text + " -> " + r2);
+        return r2;
     }
 
     private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node, String text) {
@@ -100,33 +86,5 @@ public class AccService extends AccessibilityService {
             }
         }
         return null;
-    }
-
-    private static boolean findAndClick(AccessibilityNodeInfo node, String text) {
-        if (node == null || text == null) return false;
-        CharSequence t = node.getText();
-        if (t != null && t.toString().contains(text)) {
-            if (performClick(node)) return true;
-        }
-        CharSequence d = node.getContentDescription();
-        if (d != null && d.toString().contains(text)) {
-            if (performClick(node)) return true;
-        }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                if (findAndClick(child, text)) return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean performClick(AccessibilityNodeInfo node) {
-        AccessibilityNodeInfo clickable = node;
-        while (clickable != null && !clickable.isClickable()) {
-            clickable = clickable.getParent();
-        }
-        if (clickable == null) return false;
-        return clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     }
 }
