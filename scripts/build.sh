@@ -1,22 +1,12 @@
 #!/bin/bash
 
 cd /home/user/hostcwd
+rm -rf .buildozer
 
-# Создаём папку и файл конфигурации сервиса (БЕЗ android:description)
-mkdir -p res/xml
-
-cat > res/xml/accessibility_service_config.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
-    android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
-    android:canRetrieveWindowContent="true"
-    android:notificationTimeout="100" />
-EOF
+SERVICE_XML='<service android:name="org.example.accswitcher.AccService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" /></service>'
 
 echo "=========================================="
-echo "PASS 1: скачиваем SDK и NDK"
+echo "PASS 1: скачиваем SDK, NDK и создаём шаблон манифеста"
 echo "=========================================="
 echo y | buildozer android debug || true
 
@@ -27,6 +17,16 @@ SDKMANAGER=/root/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
 if [ -f "$SDKMANAGER" ]; then
   yes | "$SDKMANAGER" --sdk_root=/root/.buildozer/android/platform/android-sdk --licenses || true
 fi
+
+echo "=========================================="
+echo "Патчим шаблоны и манифесты p4a, добавляя наш сервис"
+echo "=========================================="
+find .buildozer -name "AndroidManifest.tmpl.xml" -o -name "AndroidManifest.xml" | while read f; do
+  if ! grep -q "AccService" "$f"; then
+    sed -i "s|</application>|${SERVICE_XML}</application>|" "$f"
+    echo "Патч применён: $f"
+  fi
+done
 
 echo "=========================================="
 echo "PASS 2: сборка APK"
