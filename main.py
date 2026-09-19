@@ -8,82 +8,91 @@ from kivy.uix.button import Button
 
 from jnius import autoclass
 
-PythonActivity = autoclass('org.kivy.android.PythonActivity')
-Intent = autoclass('android.content.Intent')
-Settings = autoclass('android.provider.Settings')
-
 AccService = autoclass('org.example.accswitcher.AccService')
 
+# Варианты подписей на плитках (может отличаться в зависимости от оператора)
+WIFI_LABELS = ["Wi-Fi", "WLAN", "WiFi"]
+MOBILE_LABELS = ["t2", "T2", "Т2", "Мобильные данные", "Мобильный интернет",
+                 "Mobile data", "Mobile network"]
+HOTSPOT_LABELS = ["Точка доступа Wi-Fi", "Точка доступа", "Hotspot"]
 
-def open_screen(action_name):
-    activity = PythonActivity.mActivity
-    intent = Intent(action_name)
-    intent.addFlags(0x10000000)
-    activity.startActivity(intent)
+
+def wait(seconds):
+    time.sleep(seconds)
 
 
-def click(text, delay=2.0):
-    time.sleep(delay)
-    try:
-        result = AccService.clickByText(text)
-        print("CLICK '%s' -> %s" % (text, result))
-        return result
-    except Exception as e:
-        print("ERROR click '%s': %s" % (text, e))
-        return False
+def ensure_state(label_variants, desired, max_attempts=4):
+    for attempt in range(max_attempts):
+        state = -1
+        found_label = None
+        for label in label_variants:
+            state = AccService.getStateByText(label)
+            if state != -1:
+                found_label = label
+                break
+        print("STATE %s = %s (attempt %d)" % (label_variants, state, attempt + 1))
+        if state == -1:
+            wait(0.8)
+            continue
+        if state == 1 and desired:
+            return True
+        if state == 0 and not desired:
+            return True
+        AccService.clickByText(found_label)
+        wait(1.5)
+    return False
 
 
 def switch_to_mobile():
     print("=== SWITCH TO MOBILE ===")
-    open_screen(Settings.ACTION_WIFI_SETTINGS)
-    click("Wi-Fi", delay=3.0)
-
-    time.sleep(1)
-    open_screen(Settings.ACTION_DATA_ROAMING_SETTINGS)
-    click("Мобильные данные", delay=3.0)
-    click("Mobile data", delay=1.0)
-
-    time.sleep(1)
-    open_screen(Settings.ACTION_WIRELESS_SETTINGS)
-    click("Точка доступа", delay=3.0)
-    click("Hotspot", delay=1.0)
-
+    AccService.openQuickSettings()
+    wait(2.0)
+    ensure_state(WIFI_LABELS, False)
+    wait(0.8)
+    ensure_state(MOBILE_LABELS, True)
+    wait(0.8)
+    ensure_state(HOTSPOT_LABELS, True)
     print("=== DONE ===")
 
 
 def switch_to_wifi():
     print("=== SWITCH TO WIFI ===")
-    open_screen(Settings.ACTION_WIRELESS_SETTINGS)
-    click("Точка доступа", delay=3.0)
-    click("Hotspot", delay=1.0)
-
-    time.sleep(1)
-    open_screen(Settings.ACTION_DATA_ROAMING_SETTINGS)
-    click("Мобильные данные", delay=3.0)
-    click("Mobile data", delay=1.0)
-
-    time.sleep(1)
-    open_screen(Settings.ACTION_WIFI_SETTINGS)
-    click("Wi-Fi", delay=3.0)
-
+    AccService.openQuickSettings()
+    wait(2.0)
+    ensure_state(HOTSPOT_LABELS, False)
+    wait(0.8)
+    ensure_state(MOBILE_LABELS, False)
+    wait(0.8)
+    ensure_state(WIFI_LABELS, True)
     print("=== DONE ===")
+
+
+def dump_all():
+    print("=== DUMP ALL TEXTS ===")
+    AccService.openQuickSettings()
+    wait(2.0)
+    AccService.dumpTexts()
+    print("=== DUMP SENT — смотрите logcat ===")
 
 
 class AccSwitcherApp(App):
     def build(self):
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
         layout.add_widget(Label(
-            text="AccSwitcher\n\nНажмите кнопку, чтобы проверить работу.\n"
-                 "Расписание добавим позже.",
+            text="AccSwitcher\n\nТест через панель быстрых настроек",
             halign='center'
         ))
-        btn1 = Button(text="Тест: переключить на МОБИЛЬНЫЙ", size_hint=(1, 0.3))
+        btn1 = Button(text="Тест: МОБИЛЬНЫЙ", size_hint=(1, 0.22))
         btn1.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
         layout.add_widget(btn1)
 
-        btn2 = Button(text="Тест: переключить на WI-FI", size_hint=(1, 0.3))
+        btn2 = Button(text="Тест: WI-FI", size_hint=(1, 0.22))
         btn2.bind(on_press=lambda x: Thread(target=switch_to_wifi).start())
         layout.add_widget(btn2)
+
+        btn3 = Button(text="ДИАГНОСТИКА (показать все надписи)", size_hint=(1, 0.22))
+        btn3.bind(on_press=lambda x: Thread(target=dump_all).start())
+        layout.add_widget(btn3)
 
         return layout
 
