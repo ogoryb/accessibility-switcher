@@ -19,49 +19,41 @@ def wait(seconds):
     time.sleep(seconds)
 
 
-def open_panel():
-    AccService.openQuickSettings()
-    wait(2.0)
-
-
 def toggle_once(label_variants, desired):
-    """Открывает шторку, проверяет состояние, при необходимости кликает. Возвращает True/False."""
     for attempt in range(3):
-        open_panel()
-        state = -1
+        AccService.openQuickSettings()
+        wait(2.0)
+
         found_label = None
         for label in label_variants:
             state = AccService.getStateByText(label)
             if state != -1:
                 found_label = label
+                if state == 1 and desired:
+                    return True
+                if state == 0 and not desired:
+                    return True
                 break
-        print("STATE %s = %s (attempt %d)" % (label_variants, state, attempt + 1))
-        if state == -1:
+
+        if found_label is None:
             wait(1.0)
             continue
-        if state == 1 and desired:
-            return True
-        if state == 0 and not desired:
-            return True
+
         AccService.clickByText(found_label)
         wait(2.0)
     return False
 
 
 def switch_to_mobile():
-    print("=== SWITCH TO MOBILE ===")
     toggle_once(WIFI_LABELS, False)
     toggle_once(MOBILE_LABELS, True)
     toggle_once(HOTSPOT_LABELS, True)
-    print("=== DONE ===")
 
 
 def switch_to_wifi():
-    print("=== SWITCH TO WIFI ===")
     toggle_once(HOTSPOT_LABELS, False)
     toggle_once(MOBILE_LABELS, False)
     toggle_once(WIFI_LABELS, True)
-    print("=== DONE ===")
 
 
 class AccSwitcherApp(App):
