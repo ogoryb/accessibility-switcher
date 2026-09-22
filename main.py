@@ -14,6 +14,9 @@ WIFI_LABELS = ["Wi-Fi", "WLAN", "WiFi"]
 MOBILE_LABELS = ["t2", "T2", "Т2", "Мобильные данные", "Мобильный интернет", "Mobile data"]
 HOTSPOT_LABELS = ["Точка доступа Wi-Fi", "Точка доступа", "Hotspot"]
 
+# Кнопки в диалоге подтверждения (для отключения hotspot)
+CONFIRM_LABELS = ["Отключить", "Выключить", "ОК", "OK", "Да", "Turn off", "Disable"]
+
 
 def wait(seconds):
     time.sleep(seconds)
@@ -28,6 +31,18 @@ def click_tile(label_variants):
     return False
 
 
+def click_confirm_if_appears():
+    """После клика по hotspot появляется диалог 'Отключить точку доступа?'.
+    Ищем кнопку подтверждения и нажимаем её."""
+    wait(1.5)
+    for label in CONFIRM_LABELS:
+        if AccService.hasText(label):
+            result = AccService.clickByText(label)
+            if result:
+                return True
+    return False
+
+
 def switch_to_mobile():
     click_tile(WIFI_LABELS)
     wait(1.5)
@@ -37,7 +52,10 @@ def switch_to_mobile():
 
 
 def switch_to_wifi():
+    # Сначала hotspot — может быть диалог
     click_tile(HOTSPOT_LABELS)
+    click_confirm_if_appears()
+
     wait(1.5)
     click_tile(MOBILE_LABELS)
     wait(1.5)
@@ -48,7 +66,7 @@ class AccSwitcherApp(App):
     def build(self):
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
         layout.add_widget(Label(
-            text="AccSwitcher\n\nКнопки ПЕРЕКЛЮЧАЮТ плитки (не проверяют состояние)",
+            text="AccSwitcher\n\nОтключение hotspot с подтверждением",
             halign='center'
         ))
         btn1 = Button(text="Переключить на МОБИЛЬНЫЙ", size_hint=(1, 0.3))
