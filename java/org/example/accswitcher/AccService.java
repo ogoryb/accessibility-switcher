@@ -34,9 +34,17 @@ public class AccService extends AccessibilityService {
     }
 
     public static void closePanel() {
-        if (instance == null) return;
+        if (instance == null) {
+            Log.e(TAG, "closePanel: instance null");
+            return;
+        }
+        Log.d(TAG, "closePanel: pressing BACK");
         instance.performGlobalAction(GLOBAL_ACTION_BACK);
-        Log.d(TAG, "closePanel");
+        try {
+            Thread.sleep(700);
+        } catch (InterruptedException e) {}
+        Log.d(TAG, "closePanel: pressing BACK again");
+        instance.performGlobalAction(GLOBAL_ACTION_BACK);
     }
 
     public static boolean isConnected() {
