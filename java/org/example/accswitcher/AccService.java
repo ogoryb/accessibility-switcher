@@ -34,120 +34,107 @@ public class AccService extends AccessibilityService {
     }
 
     public static boolean openQuickSettings() {
-        if (instance == null) {
-            Log.e(TAG, "openQuickSettings: instance null");
-            return false;
-        }
-        boolean r = instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
-        Log.d(TAG, "openQuickSettings -> " + r);
-        return r;
+        if (instance == null) return false;
+        return instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
     }
 
-    // Проверка: есть ли на экране ТОЧНАЯ надпись (equals)
-    public static boolean hasTextExact(String text) {
-        if (text == null || instance == null) return false;
+    // Поиск: desc или text НАЧИНАЕТСЯ с префикса
+    public static boolean clickByPrefix(String prefix) {
+        if (prefix == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
         if (root == null) return false;
-        boolean found = findNode(root, text, true) != null;
-        Log.d(TAG, "hasTextExact " + text + " -> " + found);
-        return found;
-    }
-
-    // Проверка: есть ли на экране подстрока (contains)
-    public static boolean hasText(String text) {
-        if (text == null || instance == null) return false;
-        AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-        if (root == null) return false;
-        boolean found = findNode(root, text, false) != null;
-        Log.d(TAG, "hasText " + text + " -> " + found);
-        return found;
-    }
-
-    // Клик по ТОЧНОЙ надписи
-    public static boolean clickByTextExact(String text) {
-        return clickInternal(text, true);
-    }
-
-    // Клик по подстроке
-    public static boolean clickByText(String text) {
-        return clickInternal(text, false);
-    }
-
-    private static boolean clickInternal(String text, boolean exact) {
-        if (text == null || instance == null) {
-            Log.e(TAG, "click " + text + ": instance null");
-            return false;
-        }
-        AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-        if (root == null) {
-            Log.e(TAG, "click " + text + ": root null");
-            return false;
-        }
-        AccessibilityNodeInfo node = findNode(root, text, exact);
+        AccessibilityNodeInfo node = findNodePrefix(root, prefix);
         if (node == null) {
-            Log.d(TAG, "click " + (exact ? "exact " : "") + text + ": not found");
+            Log.d(TAG, "prefix " + prefix + ": not found");
             return false;
         }
+        return performClick(node, "prefix " + prefix);
+    }
+
+    // Поиск: desc или text СОДЕРЖИТ подстроку
+    public static boolean clickBySubstring(String sub) {
+        if (sub == null || instance == null) return false;
+        AccessibilityNodeInfo root = instance.getRootInActiveWindow();
+        if (root == null) return false;
+        AccessibilityNodeInfo node = findNodeSubstring(root, sub);
+        if (node == null) {
+            Log.d(TAG, "sub " + sub + ": not found");
+            return false;
+        }
+        return performClick(node, "sub " + sub);
+    }
+
+    // Поиск: точное совпадение desc или text
+    public static boolean clickByExact(String text) {
+        if (text == null || instance == null) return false;
+        AccessibilityNodeInfo root = instance.getRootInActiveWindow();
+        if (root == null) return false;
+        AccessibilityNodeInfo node = findNodeExact(root, text);
+        if (node == null) {
+            Log.d(TAG, "exact " + text + ": not found");
+            return false;
+        }
+        return performClick(node, "exact " + text);
+    }
+
+    private static boolean performClick(AccessibilityNodeInfo node, String tag) {
         AccessibilityNodeInfo clickable = node;
         while (clickable != null && !clickable.isClickable()) {
             clickable = clickable.getParent();
         }
         if (clickable != null) {
             boolean r = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-            Log.d(TAG, "click ancestor " + text + " -> " + r);
+            Log.d(TAG, "click " + tag + " ancestor -> " + r);
             if (r) return true;
         }
         boolean r2 = node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        Log.d(TAG, "click self " + text + " -> " + r2);
+        Log.d(TAG, "click " + tag + " self -> " + r2);
         return r2;
     }
 
-    // Диагностика: вывести все тексты и описания на экране
-    public static void dumpTexts() {
-        if (instance == null) {
-            Log.d(TAG, "DUMP instance null");
-            return;
+    private static AccessibilityNodeInfo findNodePrefix(AccessibilityNodeInfo node, String prefix) {
+        if (node == null) return null;
+        CharSequence t = node.getText();
+        if (t != null && t.toString().startsWith(prefix)) return node;
+        CharSequence d = node.getContentDescription();
+        if (d != null && d.toString().startsWith(prefix)) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo c = node.getChild(i);
+            if (c != null) {
+                AccessibilityNodeInfo f = findNodePrefix(c, prefix);
+                if (f != null) return f;
+            }
         }
-        AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-        if (root == null) {
-            Log.d(TAG, "DUMP root null");
-            return;
-        }
-        Log.d(TAG, "DUMP START");
-        dumpRecursive(root, 0);
-        Log.d(TAG, "DUMP END");
+        return null;
     }
 
-    private static void dumpRecursive(AccessibilityNodeInfo node, int depth) {
-        if (node == null) return;
+    private static AccessibilityNodeInfo findNodeSubstring(AccessibilityNodeInfo node, String sub) {
+        if (node == null) return null;
         CharSequence t = node.getText();
+        if (t != null && t.toString().contains(sub)) return node;
         CharSequence d = node.getContentDescription();
-        if (t != null || d != null) {
-            StringBuilder indent = new StringBuilder();
-            for (int i = 0; i < depth; i++) indent.append("  ");
-            Log.d(TAG, "DUMP " + indent + "text=[" + t + "] desc=[" + d
-                    + "] clickable=" + node.isClickable());
-        }
+        if (d != null && d.toString().contains(sub)) return node;
         for (int i = 0; i < node.getChildCount(); i++) {
-            dumpRecursive(node.getChild(i), depth + 1);
+            AccessibilityNodeInfo c = node.getChild(i);
+            if (c != null) {
+                AccessibilityNodeInfo f = findNodeSubstring(c, sub);
+                if (f != null) return f;
+            }
         }
+        return null;
     }
 
-    private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node, String text, boolean exact) {
-        if (node == null || text == null) return null;
+    private static AccessibilityNodeInfo findNodeExact(AccessibilityNodeInfo node, String text) {
+        if (node == null) return null;
         CharSequence t = node.getText();
-        if (t != null) {
-            if (exact ? t.toString().equals(text) : t.toString().contains(text)) return node;
-        }
+        if (t != null && t.toString().equals(text)) return node;
         CharSequence d = node.getContentDescription();
-        if (d != null) {
-            if (exact ? d.toString().equals(text) : d.toString().contains(text)) return node;
-        }
+        if (d != null && d.toString().equals(text)) return node;
         for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                AccessibilityNodeInfo found = findNode(child, text, exact);
-                if (found != null) return found;
+            AccessibilityNodeInfo c = node.getChild(i);
+            if (c != null) {
+                AccessibilityNodeInfo f = findNodeExact(c, text);
+                if (f != null) return f;
             }
         }
         return null;
