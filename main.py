@@ -11,6 +11,9 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.scrollview import ScrollView
 
+from kivy.core.window import Window
+Window.softinput_mode = 'pan'
+
 from jnius import autoclass
 
 AccService = autoclass('org.example.accswitcher.AccService')
@@ -80,10 +83,27 @@ def switch_to_wifi():
     click_wifi()
 
 
+# ============ Нормализация времени ============
+
+def normalize_time(raw):
+    """Принимает '0700', '07:00', '700', '7:0' → возвращает '07:00'.
+    Возвращает None, если невалидно."""
+    s = raw.strip().replace(":", "").replace(".", "").replace(" ", "")
+    if not s.isdigit():
+        return None
+    if len(s) == 3:  # '700' → '0700'
+        s = "0" + s
+    if len(s) != 4:
+        return None
+    h, m = int(s[:2]), int(s[2:])
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return "%02d:%02d" % (h, m)
+
+
 # ============ Файл расписания ============
 
 def load_schedule():
-    """Возвращает (records, enabled)."""
     records = []
     enabled = False
     if SCHEDULE_FILE and os.path.exists(SCHEDULE_FILE):
@@ -121,7 +141,7 @@ class Scheduler(Thread):
     def __init__(self, app):
         super().__init__(daemon=True)
         self.app = app
-        self.done_today = {}  # (time, action) -> "YYYY-MM-DD"
+        self.done_today = {}
 
     def run(self):
         while True:
@@ -132,7 +152,7 @@ class Scheduler(Thread):
                 now = datetime.now()
                 now_hhmm = now.strftime("%H:%M")
                 today = now.strftime("%Y-%m-%d")
-                records = list(self.app.records)  # копия — потокобезопасно
+                records = list(self.app.records)
                 for t, action in records:
                     if t != now_hhmm:
                         continue
@@ -177,7 +197,6 @@ class AccSwitcherApp(App):
 
         root.add_widget(Label(text="AccSwitcher — расписание", size_hint_y=None, height=30))
 
-        # Чекбокс "включить"
         top = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
         top.add_widget(Label(text="Включить расписание:"))
         self.enabled_cb = CheckBox(active=self.schedule_enabled)
@@ -185,16 +204,20 @@ class AccSwitcherApp(App):
         top.add_widget(self.enabled_cb)
         root.add_widget(top)
 
-        # Список записей
         self.list_box = BoxLayout(orientation='vertical', size_hint_y=None, spacing=4)
         self.list_box.bind(minimum_height=self.list_box.setter('height'))
         scroll = ScrollView()
         scroll.add_widget(self.list_box)
         root.add_widget(scroll)
 
-        # Поля добавления
         add_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=50, spacing=5)
-        self.time_input = TextInput(text="07:00", multiline=False, size_hint_x=0.3)
+        self.time_input = TextInput(
+            text="0700",
+            multiline=False,
+            input_filter='int',
+            hint_text="ЧЧММ, напр. 0700",
+            size_hint_x=0.3
+        )
         add_row.add_widget(self.time_input)
         b1 = Button(text="+ Мобильный", size_hint_x=0.35)
         b1.bind(on_press=self.add_mobile)
@@ -204,12 +227,10 @@ class AccSwitcherApp(App):
         add_row.add_widget(b2)
         root.add_widget(add_row)
 
-        # Сохранить
         bsave = Button(text="СОХРАНИТЬ", size_hint_y=None, height=50)
         bsave.bind(on_press=self.save_all)
         root.add_widget(bsave)
 
-        # Тестовые кнопки
         btm = Button(text="Тест: МОБИЛЬНЫЙ", size_hint_y=None, height=50)
         btm.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
         root.add_widget(btm)
@@ -219,10 +240,7 @@ class AccSwitcherApp(App):
         root.add_widget(btw)
 
         self.refresh_list()
-
-        # Запускаем фоновый планировщик
         Scheduler(self).start()
-
         return root
 
     def refresh_list(self):
@@ -239,28 +257,24 @@ class AccSwitcherApp(App):
         self.schedule_enabled = value
         save_schedule(self.records, self.schedule_enabled)
 
-    def _valid_time(self, t):
-        if len(t) != 5 or t[2] != ":":
-            return False
-        try:
-            h, m = int(t[:2]), int(t[3:])
-            return 0 <= h <= 23 and 0 <= m <= 59
-        except ValueError:
-            return False
+    def _add(self, action):
+        norm = normalize_time(self.time_input.text)
+        if norm is None:
+            print("Некорректное время:", self.time_input.text)
+            return
+        if len(self.records) >= 12:
+            print("Слишком много записей")
+            return
+        self.records.append((norm, action))
+        self.time_input.text = ""
+        self.refresh_list()
+        save_schedule(self.records, self.schedule_enabled)
 
     def add_mobile(self, *args):
-        t = self.time_input.text.strip()
-        if self._valid_time(t) and len(self.records) < 12:
-            self.records.append((t, "mobile"))
-            self.refresh_list()
-            save_schedule(self.records, self.schedule_enabled)
+        self._add("mobile")
 
     def add_wifi(self, *args):
-        t = self.time_input.text.strip()
-        if self._valid_time(t) and len(self.records) < 12:
-            self.records.append((t, "wifi"))
-            self.refresh_list()
-            save_schedule(self.records, self.schedule_enabled)
+        self._add("wifi")
 
     def save_all(self, *args):
         save_schedule(self.records, self.schedule_enabled)
