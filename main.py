@@ -13,7 +13,8 @@ AccService = autoclass('org.example.accswitcher.AccService')
 WIFI_LABELS = ["Wi-Fi", "WLAN", "WiFi"]
 MOBILE_LABELS = ["t2", "T2", "Т2", "Мобильные данные", "Мобильный интернет", "Mobile data"]
 HOTSPOT_LABELS = ["Точка доступа Wi-Fi", "Точка доступа", "Hotspot"]
-CONFIRM_LABELS = ["Отключить", "Выключить", "ОК", "OK", "Да", "Turn off", "Disable"]
+CONFIRM_LABELS = ["Отключить", "Выключить", "ОК", "OK", "Да",
+                  "Turn off", "Disable", "Отключить точку доступа"]
 
 
 def wait(seconds):
@@ -21,24 +22,36 @@ def wait(seconds):
 
 
 def check_service():
-    """Проверяем, подключена ли служба. Если нет — бросаем исключение."""
     if not AccService.isConnected():
         raise RuntimeError("Служба доступности не подключена. Включите AccSwitcher в Специальных возможностях.")
 
 
 def click_tile(label_variants):
+    """Открывает шторку и кликает по плитке. Сначала ищет точное совпадение, потом подстроку."""
     check_service()
     AccService.openQuickSettings()
     wait(2.5)
+
+    # Сначала точное совпадение (избегаем «Вызовы по Wi-Fi для SIM 1»)
+    for label in label_variants:
+        if AccService.hasTextExact(label):
+            return AccService.clickByTextExact(label)
+
+    # Если точного нет — ищем по подстроке
     for label in label_variants:
         if AccService.hasText(label):
             return AccService.clickByText(label)
+
     return False
 
 
 def click_confirm_if_appears():
     check_service()
     wait(1.5)
+    for label in CONFIRM_LABELS:
+        if AccService.hasTextExact(label):
+            if AccService.clickByTextExact(label):
+                return True
     for label in CONFIRM_LABELS:
         if AccService.hasText(label):
             if AccService.clickByText(label):
@@ -65,20 +78,33 @@ def switch_to_wifi():
     click_tile(WIFI_LABELS)
 
 
+def diagnose():
+    """Открывает шторку и выводит в лог все надписи на экране."""
+    check_service()
+    AccService.openQuickSettings()
+    wait(2.5)
+    AccService.dumpTexts()
+
+
 class AccSwitcherApp(App):
     def build(self):
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
         layout.add_widget(Label(
-            text="AccSwitcher\n\nКнопка не работает? Включите службу в Специальных возможностях.",
-            halign='center'
+            text="AccSwitcher\n\nВключите службу в Специальных возможностях.",
+            halign='center',
+            size_hint=(1, 0.2)
         ))
-        btn1 = Button(text="Переключить на МОБИЛЬНЫЙ", size_hint=(1, 0.3))
+        btn1 = Button(text="Переключить на МОБИЛЬНЫЙ", size_hint=(1, 0.25))
         btn1.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
         layout.add_widget(btn1)
 
-        btn2 = Button(text="Переключить на WI-FI", size_hint=(1, 0.3))
+        btn2 = Button(text="Переключить на WI-FI", size_hint=(1, 0.25))
         btn2.bind(on_press=lambda x: Thread(target=switch_to_wifi).start())
         layout.add_widget(btn2)
+
+        btn3 = Button(text="ДИАГНОСТИКА (все надписи в лог)", size_hint=(1, 0.25))
+        btn3.bind(on_press=lambda x: Thread(target=diagnose).start())
+        layout.add_widget(btn3)
 
         return layout
 
