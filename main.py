@@ -78,7 +78,7 @@ def switch_to_mobile():
     click_mobile()
     wait(1.0)
     click_hotspot()
-    wait(0.5)
+    wait(1.5)
     AccService.closePanel()
 
 
@@ -90,7 +90,7 @@ def switch_to_wifi():
     click_mobile()
     wait(1.0)
     click_wifi()
-    wait(0.5)
+    wait(1.5)
     AccService.closePanel()
 
 
