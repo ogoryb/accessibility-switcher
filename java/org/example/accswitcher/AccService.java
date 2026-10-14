@@ -1,6 +1,8 @@
 package org.example.accswitcher;
 
 import android.accessibilityservice.AccessibilityService;
+import android.app.KeyguardManager;
+import android.content.Context;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.util.Log;
@@ -33,6 +35,26 @@ public class AccService extends AccessibilityService {
         Log.d(TAG, "PY: " + msg);
     }
 
+    public static boolean isConnected() {
+        return instance != null;
+    }
+
+    // Разблокирован ли экран (PIN введён)
+    public static boolean isScreenUnlocked() {
+        if (instance == null) return false;
+        try {
+            KeyguardManager km = (KeyguardManager)
+                instance.getSystemService(Context.KEYGUARD_SERVICE);
+            if (km == null) return false;
+            boolean locked = km.isKeyguardLocked();
+            Log.d(TAG, "isScreenUnlocked -> " + (!locked));
+            return !locked;
+        } catch (Exception e) {
+            Log.e(TAG, "isScreenUnlocked error: " + e);
+            return false;
+        }
+    }
+
     public static void closePanel() {
         if (instance == null) {
             Log.e(TAG, "closePanel: instance null");
@@ -45,10 +67,6 @@ public class AccService extends AccessibilityService {
         } catch (InterruptedException e) {}
         Log.d(TAG, "closePanel: pressing BACK again");
         instance.performGlobalAction(GLOBAL_ACTION_BACK);
-    }
-
-    public static boolean isConnected() {
-        return instance != null;
     }
 
     public static boolean openQuickSettings() {
