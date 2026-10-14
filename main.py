@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Thread
 
 from kivy.app import App
@@ -19,6 +19,7 @@ from jnius import autoclass
 AccService = autoclass('org.example.accswitcher.AccService')
 
 SCHEDULE_FILE = None
+MISSED_GRACE_MINUTES = 120   # если пропущено больше 2 часов — не выполняем
 
 
 def log(msg):
@@ -150,7 +151,7 @@ class Scheduler(Thread):
     def __init__(self, app):
         super().__init__(daemon=True)
         self.app = app
-        self.done_today = {}
+        self.done_today = {}  # (time, action) -> 'YYYY-MM-DD'
 
     def run(self):
         log("Scheduler started")
@@ -159,28 +160,44 @@ class Scheduler(Thread):
             try:
                 records, enabled = load_schedule()
                 if not enabled:
-                    log("sched: disabled")
                     continue
 
                 now = datetime.now()
-                now_hhmm = now.strftime("%H:%M")
                 today = now.strftime("%Y-%m-%d")
-                log("sched tick %s, records=%d" % (now_hhmm, len(records)))
 
                 for t, action in records:
-                    if t != now_hhmm:
+                    hh, mm = int(t[:2]), int(t[3:])
+                    scheduled = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+                    # Ещё не наступило?
+                    if now < scheduled:
                         continue
+
+                    # Уже выполнено сегодня?
                     key = (t, action)
                     if self.done_today.get(key) == today:
-                        log("sched skip done %s %s" % (t, action))
                         continue
-                    self.done_today[key] = today
+
+                    # Слишком старая запись?
+                    age = now - scheduled
+                    if age > timedelta(minutes=MISSED_GRACE_MINUTES):
+                        log("sched skip old %s %s age=%s" % (t, action, age))
+                        self.done_today[key] = today
+                        continue
+
+                    # Экран заблокирован? Ждём разблокировки.
+                    if not AccService.isScreenUnlocked():
+                        log("sched wait unlock %s %s" % (t, action))
+                        continue
+
+                    # Пора выполнять!
                     log("SCHEDULE trigger: %s %s" % (t, action))
                     try:
                         if action == "mobile":
                             switch_to_mobile()
                         elif action == "wifi":
                             switch_to_wifi()
+                        self.done_today[key] = today
                         log("sched done %s %s" % (t, action))
                     except Exception as e:
                         log("sched run error: %s" % e)
