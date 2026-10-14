@@ -1,15 +1,24 @@
+import os
 import time
+from datetime import datetime
 from threading import Thread
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
+from kivy.uix.textinput import TextInput
+from kivy.uix.checkbox import CheckBox
+from kivy.uix.scrollview import ScrollView
 
 from jnius import autoclass
 
 AccService = autoclass('org.example.accswitcher.AccService')
 
+SCHEDULE_FILE = None
+
+
+# ============ Переключение плиток ============
 
 def wait(seconds):
     time.sleep(seconds)
@@ -21,7 +30,6 @@ def check_service():
 
 
 def click_wifi():
-    """Wi-Fi плитка: desc начинается с 'Wi-Fi,' или 'WiFi,' (не 'Вызовы по Wi-Fi')."""
     AccService.openQuickSettings()
     wait(2.5)
     for prefix in ["Wi-Fi,", "WiFi,", "WLAN,", "Wi-Fi", "WiFi"]:
@@ -31,7 +39,6 @@ def click_wifi():
 
 
 def click_mobile():
-    """Мобильная плитка: desc содержит 'Сигнал телефонной сети'."""
     AccService.openQuickSettings()
     wait(2.5)
     for sub in ["Сигнал телефонной сети", "t2,", "T2,", "Т2,"]:
@@ -41,15 +48,12 @@ def click_mobile():
 
 
 def click_hotspot():
-    """Точка доступа: desc равно 'Точка доступа' (exact)."""
     AccService.openQuickSettings()
     wait(2.5)
     return AccService.clickByExact("Точка доступа")
 
 
 def click_confirm_if_appears():
-    """Диалог 'Отключить точку доступа?' — ищем ТОЧНОЕ 'Отключить' (без точки).
-    Уведомления типа 'Нажмите, чтобы отключить.' не сработают (там подстрока)."""
     wait(1.2)
     for label in ["Отключить", "Выключить", "ОК", "OK"]:
         if AccService.clickByExact(label):
@@ -76,22 +80,191 @@ def switch_to_wifi():
     click_wifi()
 
 
+# ============ Файл расписания ============
+
+def load_schedule():
+    """Возвращает (records, enabled)."""
+    records = []
+    enabled = False
+    if SCHEDULE_FILE and os.path.exists(SCHEDULE_FILE):
+        with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line == "enabled=1":
+                    enabled = True
+                elif line.startswith("enabled="):
+                    enabled = False
+                else:
+                    parts = line.split()
+                    if len(parts) == 2:
+                        records.append((parts[0], parts[1]))
+    return records, enabled
+
+
+def save_schedule(records, enabled):
+    if not SCHEDULE_FILE:
+        return
+    try:
+        with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
+            f.write("enabled=%d\n" % (1 if enabled else 0))
+            for t, a in records:
+                f.write("%s %s\n" % (t, a))
+    except Exception as e:
+        print("save error:", e)
+
+
+# ============ Планировщик ============
+
+class Scheduler(Thread):
+    def __init__(self, app):
+        super().__init__(daemon=True)
+        self.app = app
+        self.done_today = {}  # (time, action) -> "YYYY-MM-DD"
+
+    def run(self):
+        while True:
+            time.sleep(30)
+            try:
+                if not self.app.schedule_enabled:
+                    continue
+                now = datetime.now()
+                now_hhmm = now.strftime("%H:%M")
+                today = now.strftime("%Y-%m-%d")
+                records = list(self.app.records)  # копия — потокобезопасно
+                for t, action in records:
+                    if t != now_hhmm:
+                        continue
+                    key = (t, action)
+                    if self.done_today.get(key) == today:
+                        continue
+                    self.done_today[key] = today
+                    print("SCHEDULE trigger:", t, action)
+                    try:
+                        if action == "mobile":
+                            switch_to_mobile()
+                        elif action == "wifi":
+                            switch_to_wifi()
+                    except Exception as e:
+                        print("schedule run error:", e)
+            except Exception as e:
+                print("scheduler loop error:", e)
+
+
+# ============ Элемент списка ============
+
+class ScheduleItem(BoxLayout):
+    def __init__(self, time_str, action, on_delete, **kwargs):
+        super().__init__(orientation='horizontal', size_hint_y=None, height=50, **kwargs)
+        name = "МОБИЛЬНЫЙ" if action == "mobile" else "WI-FI"
+        lbl = Label(text="%s → %s" % (time_str, name), size_hint_x=0.75)
+        self.add_widget(lbl)
+        btn = Button(text="✕", size_hint_x=0.25)
+        btn.bind(on_press=lambda x: on_delete(time_str, action))
+        self.add_widget(btn)
+
+
+# ============ Приложение ============
+
 class AccSwitcherApp(App):
     def build(self):
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(Label(
-            text="AccSwitcher v2\n\nВключите службу в Специальных возможностях.",
-            halign='center'
-        ))
-        btn1 = Button(text="Переключить на МОБИЛЬНЫЙ", size_hint=(1, 0.3))
-        btn1.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
-        layout.add_widget(btn1)
+        global SCHEDULE_FILE
+        SCHEDULE_FILE = os.path.join(self.user_data_dir, "schedule.txt")
+        self.records, self.schedule_enabled = load_schedule()
 
-        btn2 = Button(text="Переключить на WI-FI", size_hint=(1, 0.3))
-        btn2.bind(on_press=lambda x: Thread(target=switch_to_wifi).start())
-        layout.add_widget(btn2)
+        root = BoxLayout(orientation='vertical', padding=10, spacing=6)
 
-        return layout
+        root.add_widget(Label(text="AccSwitcher — расписание", size_hint_y=None, height=30))
+
+        # Чекбокс "включить"
+        top = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        top.add_widget(Label(text="Включить расписание:"))
+        self.enabled_cb = CheckBox(active=self.schedule_enabled)
+        self.enabled_cb.bind(active=self.on_enabled)
+        top.add_widget(self.enabled_cb)
+        root.add_widget(top)
+
+        # Список записей
+        self.list_box = BoxLayout(orientation='vertical', size_hint_y=None, spacing=4)
+        self.list_box.bind(minimum_height=self.list_box.setter('height'))
+        scroll = ScrollView()
+        scroll.add_widget(self.list_box)
+        root.add_widget(scroll)
+
+        # Поля добавления
+        add_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=50, spacing=5)
+        self.time_input = TextInput(text="07:00", multiline=False, size_hint_x=0.3)
+        add_row.add_widget(self.time_input)
+        b1 = Button(text="+ Мобильный", size_hint_x=0.35)
+        b1.bind(on_press=self.add_mobile)
+        add_row.add_widget(b1)
+        b2 = Button(text="+ Wi-Fi", size_hint_x=0.35)
+        b2.bind(on_press=self.add_wifi)
+        add_row.add_widget(b2)
+        root.add_widget(add_row)
+
+        # Сохранить
+        bsave = Button(text="СОХРАНИТЬ", size_hint_y=None, height=50)
+        bsave.bind(on_press=self.save_all)
+        root.add_widget(bsave)
+
+        # Тестовые кнопки
+        btm = Button(text="Тест: МОБИЛЬНЫЙ", size_hint_y=None, height=50)
+        btm.bind(on_press=lambda x: Thread(target=switch_to_mobile).start())
+        root.add_widget(btm)
+
+        btw = Button(text="Тест: WI-FI", size_hint_y=None, height=50)
+        btw.bind(on_press=lambda x: Thread(target=switch_to_wifi).start())
+        root.add_widget(btw)
+
+        self.refresh_list()
+
+        # Запускаем фоновый планировщик
+        Scheduler(self).start()
+
+        return root
+
+    def refresh_list(self):
+        self.list_box.clear_widgets()
+        for t, action in sorted(self.records, key=lambda r: r[0]):
+            self.list_box.add_widget(ScheduleItem(t, action, self.delete_record))
+
+    def delete_record(self, t, action):
+        self.records = [r for r in self.records if r != (t, action)]
+        self.refresh_list()
+        save_schedule(self.records, self.schedule_enabled)
+
+    def on_enabled(self, instance, value):
+        self.schedule_enabled = value
+        save_schedule(self.records, self.schedule_enabled)
+
+    def _valid_time(self, t):
+        if len(t) != 5 or t[2] != ":":
+            return False
+        try:
+            h, m = int(t[:2]), int(t[3:])
+            return 0 <= h <= 23 and 0 <= m <= 59
+        except ValueError:
+            return False
+
+    def add_mobile(self, *args):
+        t = self.time_input.text.strip()
+        if self._valid_time(t) and len(self.records) < 12:
+            self.records.append((t, "mobile"))
+            self.refresh_list()
+            save_schedule(self.records, self.schedule_enabled)
+
+    def add_wifi(self, *args):
+        t = self.time_input.text.strip()
+        if self._valid_time(t) and len(self.records) < 12:
+            self.records.append((t, "wifi"))
+            self.refresh_list()
+            save_schedule(self.records, self.schedule_enabled)
+
+    def save_all(self, *args):
+        save_schedule(self.records, self.schedule_enabled)
+        print("SAVED:", self.records, "enabled=", self.schedule_enabled)
 
 
 if __name__ == '__main__':
