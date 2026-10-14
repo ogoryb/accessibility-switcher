@@ -29,16 +29,30 @@ public class AccService extends AccessibilityService {
         super.onDestroy();
     }
 
+    public static void log(String msg) {
+        Log.d(TAG, "PY: " + msg);
+    }
+
+    public static void closePanel() {
+        if (instance == null) return;
+        instance.performGlobalAction(GLOBAL_ACTION_BACK);
+        Log.d(TAG, "closePanel");
+    }
+
     public static boolean isConnected() {
         return instance != null;
     }
 
     public static boolean openQuickSettings() {
-        if (instance == null) return false;
-        return instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
+        if (instance == null) {
+            Log.e(TAG, "openQuickSettings: instance null");
+            return false;
+        }
+        boolean r = instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
+        Log.d(TAG, "openQuickSettings -> " + r);
+        return r;
     }
 
-    // Поиск: desc или text НАЧИНАЕТСЯ с префикса
     public static boolean clickByPrefix(String prefix) {
         if (prefix == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
@@ -51,7 +65,6 @@ public class AccService extends AccessibilityService {
         return performClick(node, "prefix " + prefix);
     }
 
-    // Поиск: desc или text СОДЕРЖИТ подстроку
     public static boolean clickBySubstring(String sub) {
         if (sub == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
@@ -64,7 +77,6 @@ public class AccService extends AccessibilityService {
         return performClick(node, "sub " + sub);
     }
 
-    // Поиск: точное совпадение desc или text
     public static boolean clickByExact(String text) {
         if (text == null || instance == null) return false;
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
