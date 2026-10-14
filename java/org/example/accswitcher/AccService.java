@@ -29,24 +29,51 @@ public class AccService extends AccessibilityService {
         super.onDestroy();
     }
 
+    // Проверка: подключена ли служба (Python будет это вызывать)
+    public static boolean isConnected() {
+        boolean ok = instance != null;
+        Log.d(TAG, "isConnected -> " + ok);
+        return ok;
+    }
+
     public static boolean openQuickSettings() {
-        if (instance == null) return false;
+        if (instance == null) {
+            Log.e(TAG, "openQuickSettings: instance null");
+            return false;
+        }
         boolean r = instance.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS);
         Log.d(TAG, "openQuickSettings -> " + r);
         return r;
     }
 
     public static boolean hasText(String text) {
-        if (text == null || instance == null) return false;
+        if (text == null) {
+            Log.e(TAG, "hasText: text null");
+            return false;
+        }
+        if (instance == null) {
+            Log.e(TAG, "hasText " + text + ": instance null");
+            return false;
+        }
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-        if (root == null) return false;
+        if (root == null) {
+            Log.e(TAG, "hasText " + text + ": root null");
+            return false;
+        }
         boolean found = findNode(root, text) != null;
         Log.d(TAG, "hasText " + text + " -> " + found);
         return found;
     }
 
     public static boolean clickByText(String text) {
-        if (text == null || instance == null) return false;
+        if (text == null) {
+            Log.e(TAG, "click: text null");
+            return false;
+        }
+        if (instance == null) {
+            Log.e(TAG, "click " + text + ": instance null");
+            return false;
+        }
         AccessibilityNodeInfo root = instance.getRootInActiveWindow();
         if (root == null) {
             Log.e(TAG, "click " + text + ": root null");
@@ -57,7 +84,6 @@ public class AccService extends AccessibilityService {
             Log.d(TAG, "click " + text + ": not found");
             return false;
         }
-        // кликаем сам узел или его кликабельного предка
         AccessibilityNodeInfo clickable = node;
         while (clickable != null && !clickable.isClickable()) {
             clickable = clickable.getParent();
